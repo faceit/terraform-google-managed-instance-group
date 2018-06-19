@@ -274,3 +274,19 @@ variable hc_path {
   description = "Health check, the http path to check."
   default     = "/"
 }
+
+
+variable "preemptible" {
+  description = "preemptible setting for the instance template"
+  default = false
+}
+
+variable "automatic_restart" {
+  default = false
+  description = "automatic_restart for the instance template"
+}
+
+variable "on_host_maintenance" {
+  default = "TERMINATE"
+  description = "on_host_maintenance for the instance template"
+}

@@ -44,6 +44,12 @@ resource "google_compute_instance_template" "default" {
     disk_size_gb = "${var.disk_size_gb}"
   }
 
+  scheduling {
+    automatic_restart   = "${var.automatic_restart}"
+    on_host_maintenance = "${var.on_host_maintenance}"
+    preemptible = "${var.preemptible}"
+  }
+
   service_account {
     email  = "${var.service_account_email}"
     scopes = ["${var.service_account_scopes}"]
