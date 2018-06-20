@@ -151,7 +151,7 @@ resource "google_compute_region_instance_group_manager" "default" {
   target_size = "${var.autoscaling ? var.min_replicas : var.size}"
 
   auto_healing_policies {
-    health_check      = "${var.http_health_check ? element(concat(google_compute_health_check.mig-health-check.*.self_link, list("")), 0) : ""}"
+    health_check      = "${var.http_health_check ? element(concat(google_compute_health_check.mig-health-check.*.self_link, list("")), 0) : element(concat(google_compute_health_check.mig-tcp-health-check.*.self_link, list("")), 0)}"
     initial_delay_sec = "${var.hc_initial_delay}"
   }
 
@@ -230,8 +230,38 @@ resource "google_compute_health_check" "mig-health-check" {
   }
 }
 
+resource "google_compute_health_check" "mig-tcp-health-check" {
+  count   = "${var.tcp_health_check ? 1 : 0}"
+  name    = "${var.name}"
+  project = "${var.project}"
+
+  check_interval_sec  = "${var.hc_interval}"
+  timeout_sec         = "${var.hc_timeout}"
+  healthy_threshold   = "${var.hc_healthy_threshold}"
+  unhealthy_threshold = "${var.hc_unhealthy_threshold}"
+
+  tcp_health_check {
+    port = "${var.hc_port == "" ? var.service_port : var.hc_port}"
+  }
+}
+
 resource "google_compute_firewall" "mig-health-check" {
   count   = "${var.http_health_check ? 1 : 0}"
+  project = "${var.subnetwork_project == "" ? var.project : var.subnetwork_project}"
+  name    = "${var.name}-vm-hc"
+  network = "${var.network}"
+
+  allow {
+    protocol = "tcp"
+    ports    = ["${var.hc_port == "" ? var.service_port : var.hc_port}"]
+  }
+
+  source_ranges = ["130.211.0.0/22", "35.191.0.0/16"]
+  target_tags   = ["${var.target_tags}"]
+}
+
+resource "google_compute_firewall" "mig-tcp-health-check" {
+  count   = "${var.tcp_health_check ? 1 : 0}"
   project = "${var.subnetwork_project == "" ? var.project : var.subnetwork_project}"
   name    = "${var.name}-vm-hc"
   network = "${var.network}"
