@@ -240,6 +240,11 @@ variable http_health_check {
   default     = true
 }
 
+variable tcp_health_check {
+  description = "Enable or disable the tcp health check for auto healing."
+  default     = false
+}
+
 variable hc_initial_delay {
   description = "Health check, intial delay in seconds."
   default     = 300
