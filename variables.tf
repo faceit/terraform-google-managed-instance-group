@@ -177,7 +177,7 @@ variable distribution_policy_zones {
 variable ssh_source_ranges {
   description = "Network ranges to allow SSH from"
   type        = "list"
-  default     = ["0.0.0.0/0"]
+  default     = []
 }
 
 variable disk_auto_delete {
