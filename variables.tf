@@ -53,6 +53,12 @@ variable name {
   description = "Name of the managed instance group."
 }
 
+variable labels {
+  description = "Labels."
+  type        = "map"
+  default     = {}
+}
+
 variable size {
   description = "Target size of the manged instance group."
   default     = 1
