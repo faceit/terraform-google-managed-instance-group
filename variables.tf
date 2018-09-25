@@ -183,7 +183,7 @@ variable distribution_policy_zones {
 variable ssh_source_ranges {
   description = "Network ranges to allow SSH from"
   type        = "list"
-  default     = []
+  default     = ["0.0.0.0/0"]
 }
 
 variable disk_auto_delete {
@@ -286,18 +286,17 @@ variable hc_path {
   default     = "/"
 }
 
-
 variable "preemptible" {
   description = "preemptible setting for the instance template"
-  default = false
+  default     = false
 }
 
 variable "automatic_restart" {
-  default = false
+  default     = false
   description = "automatic_restart for the instance template"
 }
 
 variable "on_host_maintenance" {
-  default = "TERMINATE"
+  default     = "TERMINATE"
   description = "on_host_maintenance for the instance template"
 }

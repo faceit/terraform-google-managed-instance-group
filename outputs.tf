@@ -21,7 +21,7 @@ output name {
 
 output instance_group {
   description = "Link to the `instance_group` property of the instance group manager resource."
-  value       = "${element(concat(google_compute_instance_group_manager.default.*.instance_group, list("")), 0)}"
+  value       = "${var.autoscaling ? element(concat(google_compute_instance_group_manager.default_with_autoscaling.*.instance_group, list("")), 0) : element(concat(google_compute_instance_group_manager.default_without_autoscaling.*.instance_group, list("")), 0)}"
 }
 
 output instances {
@@ -31,7 +31,12 @@ output instances {
 
 output region_instance_group {
   description = "Link to the `instance_group` property of the region instance group manager resource."
-  value       = "${element(concat(google_compute_region_instance_group_manager.default.*.instance_group, list("")), 0)}"
+  value       = "${var.autoscaling ? element(concat(google_compute_region_instance_group_manager.default_with_autoscaling.*.instance_group, list("")), 0) : element(concat(google_compute_region_instance_group_manager.default_without_autoscaling.*.instance_group, list("")), 0)}"
+}
+
+output region_instances {
+  description = "List of instances in the instance group. Note that this can change dynamically depending on the current number of instances in the group and may be empty the first time read."
+  value       = "${data.google_compute_region_instance_group.regional.*.instances}"
 }
 
 output target_tags {
@@ -51,12 +56,12 @@ output service_port_name {
 
 output depends_id {
   description = "Id of the dummy dependency created used for intra-module dependency creation with zonal groups."
-  value       = "${element(concat(null_resource.dummy_dependency.*.id, list("")), 0)}"
+  value       = "${var.autoscaling ? element(concat(null_resource.dummy_dependency_with_autoscaling.*.id, list("")), 0) : element(concat(null_resource.dummy_dependency_without_autoscaling.*.id, list("")), 0)}"
 }
 
 output region_depends_id {
   description = "Id of the dummy dependency created used for intra-module dependency creation with regional groups."
-  value       = "${element(concat(null_resource.region_dummy_dependency.*.id, list("")), 0)}"
+  value       = "${var.autoscaling ? element(concat(null_resource.region_dummy_dependency_with_autoscaling.*.id, list("")), 0) : element(concat(null_resource.region_dummy_dependency_without_autoscaling.*.id, list("")), 0)}"
 }
 
 output network_ip {
