@@ -49,7 +49,7 @@ resource "google_compute_instance_template" "default" {
   scheduling {
     automatic_restart   = "${var.automatic_restart}"
     on_host_maintenance = "${var.on_host_maintenance}"
-    preemptible = "${var.preemptible}"
+    preemptible         = "${var.preemptible}"
   }
 
   service_account {
@@ -67,8 +67,8 @@ resource "google_compute_instance_template" "default" {
   }
 }
 
-resource "google_compute_instance_group_manager" "default" {
-  count              = "${var.module_enabled && var.zonal ? 1 : 0}"
+resource "google_compute_instance_group_manager" "default_without_autoscaling" {
+  count              = "${var.module_enabled && ! var.autoscaling && var.zonal ? 1 : 0}"
   project            = "${var.project}"
   name               = "${var.name}"
   description        = "compute VM Instance Group"
@@ -84,9 +84,46 @@ resource "google_compute_instance_group_manager" "default" {
 
   target_pools = ["${var.target_pools}"]
 
-  // There is no way to unset target_size when autoscaling is true so for now, jsut use the min_replicas value.
-  // Issue: https://github.com/terraform-providers/terraform-provider-google/issues/667
-  target_size = "${var.autoscaling ? var.min_replicas : var.size}"
+  target_size = "${var.size}"
+
+  named_port {
+    name = "${var.service_port_name}"
+    port = "${var.service_port}"
+  }
+
+  auto_healing_policies = {
+    health_check      = "${var.http_health_check ? element(concat(google_compute_health_check.mig-health-check.*.self_link, list("")), 0) : ""}"
+    initial_delay_sec = "${var.hc_initial_delay}"
+  }
+
+  provisioner "local-exec" {
+    when    = "destroy"
+    command = "${var.local_cmd_destroy}"
+  }
+
+  provisioner "local-exec" {
+    when        = "create"
+    command     = "${var.local_cmd_create}"
+    interpreter = ["sh", "-c"]
+  }
+}
+
+resource "google_compute_instance_group_manager" "default_with_autoscaling" {
+  count              = "${var.module_enabled && var.autoscaling && var.zonal ? 1 : 0}"
+  project            = "${var.project}"
+  name               = "${var.name}"
+  description        = "compute VM Instance Group"
+  wait_for_instances = "${var.wait_for_instances}"
+
+  base_instance_name = "${var.name}"
+
+  instance_template = "${google_compute_instance_template.default.self_link}"
+
+  zone = "${var.zone}"
+
+  update_strategy = "${var.update_strategy}"
+
+  target_pools = ["${var.target_pools}"]
 
   named_port {
     name = "${var.service_port_name}"
@@ -115,7 +152,7 @@ resource "google_compute_autoscaler" "default" {
   name    = "${var.name}"
   zone    = "${var.zone}"
   project = "${var.project}"
-  target  = "${google_compute_instance_group_manager.default.self_link}"
+  target  = "${google_compute_instance_group_manager.default_with_autoscaling.self_link}"
 
   autoscaling_policy = {
     max_replicas               = "${var.max_replicas}"
@@ -127,8 +164,8 @@ resource "google_compute_autoscaler" "default" {
   }
 }
 
-resource "google_compute_region_instance_group_manager" "default" {
-  count              = "${var.module_enabled && ! var.zonal ? 1 : 0}"
+resource "google_compute_region_instance_group_manager" "default_without_autoscaling" {
+  count              = "${var.module_enabled && ! var.autoscaling && ! var.zonal ? 1 : 0}"
   project            = "${var.project}"
   name               = "${var.name}"
   description        = "compute VM Instance Group"
@@ -148,9 +185,50 @@ resource "google_compute_region_instance_group_manager" "default" {
 
   target_pools = ["${var.target_pools}"]
 
-  // There is no way to unset target_size when autoscaling is true so for now, jsut use the min_replicas value.
-  // Issue: https://github.com/terraform-providers/terraform-provider-google/issues/667
-  target_size = "${var.autoscaling ? var.min_replicas : var.size}"
+  target_size = "${var.size}"
+
+  auto_healing_policies {
+    health_check      = "${var.http_health_check ? element(concat(google_compute_health_check.mig-health-check.*.self_link, list("")), 0) : element(concat(google_compute_health_check.mig-tcp-health-check.*.self_link, list("")), 0)}"
+    initial_delay_sec = "${var.hc_initial_delay}"
+  }
+
+  named_port {
+    name = "${var.service_port_name}"
+    port = "${var.service_port}"
+  }
+
+  provisioner "local-exec" {
+    when    = "destroy"
+    command = "${var.local_cmd_destroy}"
+  }
+
+  provisioner "local-exec" {
+    when        = "create"
+    command     = "${var.local_cmd_create}"
+    interpreter = ["sh", "-c"]
+  }
+}
+
+resource "google_compute_region_instance_group_manager" "default_with_autoscaling" {
+  count              = "${var.module_enabled && var.autoscaling && ! var.zonal ? 1 : 0}"
+  project            = "${var.project}"
+  name               = "${var.name}"
+  description        = "compute VM Instance Group"
+  wait_for_instances = "${var.wait_for_instances}"
+
+  base_instance_name = "${var.name}"
+
+  instance_template = "${google_compute_instance_template.default.self_link}"
+
+  region = "${var.region}"
+
+  update_strategy = "${var.update_strategy}"
+
+  rolling_update_policy = ["${var.rolling_update_policy}"]
+
+  distribution_policy_zones = ["${var.distribution_policy_zones}"]
+
+  target_pools = ["${var.target_pools}"]
 
   auto_healing_policies {
     health_check      = "${var.http_health_check ? element(concat(google_compute_health_check.mig-health-check.*.self_link, list("")), 0) : element(concat(google_compute_health_check.mig-tcp-health-check.*.self_link, list("")), 0)}"
@@ -179,7 +257,7 @@ resource "google_compute_region_autoscaler" "default" {
   name    = "${var.name}"
   region  = "${var.region}"
   project = "${var.project}"
-  target  = "${google_compute_region_instance_group_manager.default.self_link}"
+  target  = "${google_compute_region_instance_group_manager.default_with_autoscaling.self_link}"
 
   autoscaling_policy = {
     max_replicas               = "${var.max_replicas}"
@@ -191,14 +269,24 @@ resource "google_compute_region_autoscaler" "default" {
   }
 }
 
-resource "null_resource" "dummy_dependency" {
-  count      = "${var.module_enabled && var.zonal ? 1 : 0}"
-  depends_on = ["google_compute_instance_group_manager.default"]
+resource "null_resource" "dummy_dependency_without_autoscaling" {
+  count      = "${var.module_enabled && ! var.autoscaling && var.zonal ? 1 : 0}"
+  depends_on = ["google_compute_instance_group_manager.default_without_autoscaling"]
 }
 
-resource "null_resource" "region_dummy_dependency" {
-  count      = "${var.module_enabled && ! var.zonal ? 1 : 0}"
-  depends_on = ["google_compute_region_instance_group_manager.default"]
+resource "null_resource" "dummy_dependency_with_autoscaling" {
+  count      = "${var.module_enabled && var.autoscaling && var.zonal ? 1 : 0}"
+  depends_on = ["google_compute_instance_group_manager.default_with_autoscaling"]
+}
+
+resource "null_resource" "region_dummy_dependency_without_autoscaling" {
+  count      = "${var.module_enabled && ! var.autoscaling && ! var.zonal ? 1 : 0}"
+  depends_on = ["google_compute_region_instance_group_manager.default_without_autoscaling"]
+}
+
+resource "null_resource" "region_dummy_dependency_with_autoscaling" {
+  count      = "${var.module_enabled && var.autoscaling && ! var.zonal ? 1 : 0}"
+  depends_on = ["google_compute_region_instance_group_manager.default_with_autoscaling"]
 }
 
 resource "google_compute_firewall" "default-ssh" {
@@ -278,8 +366,15 @@ resource "google_compute_firewall" "mig-tcp-health-check" {
 }
 
 data "google_compute_instance_group" "zonal" {
-  count   = "${var.zonal ? 1 : 0}"
-  name    = "${element(concat(google_compute_instance_group_manager.default.*.name, list("unused")), 0)}"
+  count   = "${! var.autoscaling && var.zonal ? 1 : 0}"
+  name    = "${var.autoscaling ? element(concat(google_compute_instance_group_manager.default_with_autoscaling.*.name, list("")), 0) : element(concat(google_compute_instance_group_manager.default_without_autoscaling.*.name, list("")), 0)}"
   zone    = "${var.zone}"
+  project = "${var.project}"
+}
+
+data "google_compute_region_instance_group" "regional" {
+  count   = "${! var.autoscaling && ! var.zonal ? 1 : 0}"
+  name    = "${var.autoscaling ? element(concat(google_compute_region_instance_group_manager.default_with_autoscaling.*.name, list("")), 0) : element(concat(google_compute_region_instance_group_manager.default_without_autoscaling.*.name, list("")), 0)}"
+  region  = "${var.region}"
   project = "${var.project}"
 }
